@@ -22,6 +22,8 @@ ncrmp <- read.csv("CoralBelt_Adults_raw_CLEANED_2023.csv")%>% mutate_if(is.chara
   rename(YEAR = OBS_YEAR)%>%
   droplevels()
 
+write.csv(ncrmp, "NCRMP_COlony_level_TUT_filtered.csv")
+
 ncrmp$YEAR <- as.factor(ncrmp$YEAR)
 ncrmp2 <- select(ncrmp, MAX_DEPTH_M, SITE, PER_DEAD, LATITUDE, LONGITUDE, YEAR)
 
