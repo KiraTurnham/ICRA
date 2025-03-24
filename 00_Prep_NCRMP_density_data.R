@@ -1,4 +1,5 @@
 #Creating NCRMP density data at site level using filtered ICRA/ISSP colony level data
+#then merging NCRMP site-level density with ESA site-level density (pulled from Dive Nav)
 
 #load libraries
 library(tidyverse)
@@ -11,24 +12,59 @@ rm(list=ls())
 #setwd(paste0("C:/Users/", dir, "/Documents/github/ICRA/"))
 setwd("C:/github/ICRA/data")
 
-####PREP DATA---------------
+####PREP NCMRP DATA---------------
 
 #load data 
-dat <- read.csv("NCRMP_COlony_level_TUT_filtered.csv")%>% mutate_if(is.character,as.factor)
+ICRA.dat <- read.csv("NCRMP_COlony_level_TUT_filtered.csv")%>% mutate_if(is.character,as.factor)%>%
+  select(YEAR, SITE, SPCODE, COLONYID)
 
-#quick check of number of sites surveyed per NCRMP year
-tbl_sites<- dat%>% 
-  group_by(YEAR) %>%
-  summarise(N =length(SITE))
+site <- read.csv("CoralBelt_Adults_raw_CLEANED_2023.csv")%>% mutate_if(is.character,as.factor)%>%
+  filter(ISLANDCODE == "TUT", REEF_ZONE == "Forereef", OBS_YEAR != "2020", DEPTH_BIN == "Mid")%>%
+  rename(YEAR = OBS_YEAR)%>%
+  select(YEAR, SITE, LATITUDE, LONGITUDE, MIN_DEPTH_M,MAX_DEPTH_M, TRANSECTAREA)%>%
+  distinct()%>%
+  droplevels()
 
-ncrmp <- dat%>%
-  select(YEAR, SITE, MIN_DEPTH_M,MAX_DEPTH_M, LATITUDE, LONGITUDE, TRANSECT, SEGMENT, SEGWIDTH, SEGLENGTH, COLONYID, TRANSECTAREA)%>%
-    mutate(SEG_AREA = SEGWIDTH*SEGLENGTH)
+#sum transect area per site
+site <- site %>% 
+  group_by(YEAR, SITE, LATITUDE, LONGITUDE, MIN_DEPTH_M,MAX_DEPTH_M)%>%
+  mutate(SURVEYAREA = sum(TRANSECTAREA))%>%
+  select(-TRANSECTAREA)%>%
+  distinct()
+#115 total sites
 
-den <-  ncrmp%>%
+
+#colonies per site
+col <-  ICRA.dat%>%
   group_by(YEAR, SITE) %>%
   summarise(COL_COUNT = n_distinct(COLONYID))
-  
-site_area <- ncrmp%>%
-  select(SITE, TRANSECT, TRANSECTAREA)%>%
-  distinct()
+
+NCRMP <- left_join(site, col)%>%
+  replace(is.na(.), 0)%>%
+  mutate(DENSITY=COL_COUNT/SURVEYAREA)%>%
+  ungroup()
+
+NCRMP$YEAR <- as.factor(NCRMP$YEAR)
+
+
+####read in and merge ESA data to NCRMP data
+ESA <- read_csv("ESA_Corals_Site_Density_raw.csv") %>% mutate_if(is.character,as.factor)
+as.factor(ESA$YEAR <- "2025")
+
+ESA <- ESA %>% select(YEAR, SITE, LAT, LONG, MAX_DEPTH_M, SURVEY_AREA, ICRA_DEN)%>%
+  rename(LATITUDE =LAT, LONGITUDE = LONG, SURVEYAREA = SURVEY_AREA, DENSITY = ICRA_DEN)
+NCRMP <- NCRMP %>% select(-MIN_DEPTH_M, -COL_COUNT)
+
+colnames(NCRMP)
+colnames(ESA)
+
+SITE_DEN <- rbind(NCRMP, ESA)
+
+
+#quick check of number of sites surveyed per year
+tbl_sites<- SITE_DEN%>% 
+  group_by(YEAR) %>%
+  summarise(N =length(unique(SITE)))
+
+write.csv(NCRMP, "NCRMP_ICRA_density_site-level.csv")
+write_csv(SITE_DEN, "ICRA_Site_Density_ALL_YEAR.csv")
