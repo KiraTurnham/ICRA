@@ -77,7 +77,7 @@ ICRA_20m <- ICRA_2025 %>%
 #add column for survey area
 ICRA_20m$Area_surveyed_m2<- 20
 ICRA_sub <- select(ICRA_20m, COLONYLENGTH, Area_surveyed_m2, MAX_DEPTH_M, SITE, PER_DEAD, LATITUDE, LONGITUDE, YEAR, TAIL_BINS)
-ICRA_sub$YEAR <- ordered(dat$YEAR, levels = c("2015", "2018", "2023", "2025"))
+ICRA_sub$YEAR <- ordered(ICRA_sub$YEAR, levels = c("2015", "2018", "2023", "2025"))
 
 #merge ncmrp and esa data    
 colnames(esa)
@@ -88,7 +88,6 @@ dat <- rbind(esa,ncrmp2)%>%
 dat$YEAR <- ordered(dat$YEAR, levels = c("2015", "2018", "2023", "2025"))
 
 write.csv(dat, "data/all_ICRA_Colony_level_data.csv", row.names = FALSE)
-
 
 #combine the 20m data and store as seperate dataframe to compare survey methods
 colnames(ICRA_sub)

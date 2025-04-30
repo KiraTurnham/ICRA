@@ -1,3 +1,9 @@
+library(tidyverse)
+library(hrbrthemes)
+library(viridis)
+library(ggridges)
+library(readxl)
+
 #Data summaries
 ncrmp2 %>%
   summarise(
@@ -42,9 +48,9 @@ combined_colony_data_by_method %>%
 
 
 # Compute mean size per year
-mean_size_per_year <- south_size_data %>%
+mean_size_per_year <- dat %>%
   group_by(YEAR) %>%
-  summarise(mean_size = mean(Size_cm, na.rm = TRUE))
+  summarise(COLONYLENGTH = mean(COLONYLENGTH, na.rm = TRUE))
 #1  2015      22.4
 #2  2018      26.2
 #3  2023      28.0
@@ -112,7 +118,7 @@ dat %>%
 #4 2025              33 #should weight and bootstrap 2025 data to 12 sites
 
 #correct order
-summary_stats$TAIL_BINS <- factor(summary_stats$TAIL_BINS, 
+summary_stats_size$TAIL_BINS <- factor(summary_stats_size$TAIL_BINS, 
                                   levels = c("Q20", "QMED", "Q80"))
 #prepare facet labels for plotting
 facet_labels <- c(
@@ -129,7 +135,7 @@ ggplot(dat, aes(x = PER_DEAD, y = as.factor(YEAR), fill = as.factor(YEAR))) +
   geom_density_ridges(alpha = 0.8) +  # Ridge plot
   geom_point(data = mean_PM_per_year, aes(x = (mean_PM), y = as.factor(YEAR)), #can change to log(mean_PM)
              color = "black", size = 3, shape = 16) +  # Means are points
-  stat_density_ridges(quantile_lines = TRUE, quantiles = 3, alpha = 0.5, color= "black", linewidth = 0.5) +  # Quantiles
+  #stat_density_ridges(quantile_lines = TRUE, quantiles = 3, alpha = 0.5, color= "black", linewidth = 0.5) +  # Quantiles
   geom_text(data = n_per_year, 
             aes(x = max_size + (max_size * 0.05),  
                 y = as.factor(YEAR), 
@@ -204,10 +210,41 @@ ggplot(dat, aes(x = COLONYLENGTH, y = as.factor(YEAR), fill = as.factor(YEAR))) 
 ggplot2::ggsave ("plots/Colony_size_ridge.jpeg", width = 5, height = 5, units = 'in')
 
 
+########################
+#boxplot of PM by year##
+########################
+
+ggplot(summary_stats,
+       aes(x = as.factor(YEAR), y = Mean_PM, fill = as.factor(YEAR))) +
+  geom_col(alpha = 1) +  
+  geom_errorbar(aes(
+    ymin = pmax(0, CI_Lower),  
+    ymax = CI_Upper
+  ), width = 0.2) +theme_minimal() +
+  theme(
+    panel.border = element_rect(color = "grey", fill = NA, size = 1)
+  ) +
+  labs(
+    x = "Survey Year",
+    y = "Mean percent partial mortality (%)",
+    fill="Year"
+  ) +
+  scale_fill_viridis_d(option = "C") + 
+  theme_minimal() +
+  theme(
+    legend.position = "none", 
+    axis.text.x = element_text(size = 8, family = "Helvetica", angle = 45, hjust = 0.7),
+    axis.text.y = element_text(size = 10, family = "Helvetica"),
+    axis.title = element_text(size = 12, family = "Helvetica"),
+    panel.border = element_rect(color = "grey", fill = NA, size = 1)
+  )
+ggplot2::ggsave ("plots/Partial_mortaltiy_boxplot_by_year.jpeg", width = 5, height = 5, units = 'in')
+
+
 ######################################
 #boxplot of PM by size class and year#
 ######################################
-ggplot(summary_stats %>% filter(!is.na(TAIL_BINS)), 
+ggplot(summary_stats_size %>% filter(!is.na(TAIL_BINS)), 
        aes(x = as.factor(YEAR), y = Mean_PM, fill = as.factor(YEAR))) +
   geom_col(alpha = 1) +  
   geom_errorbar(aes(
@@ -232,7 +269,6 @@ ggplot(summary_stats %>% filter(!is.na(TAIL_BINS)),
     axis.title = element_text(size = 12, family = "Helvetica"),
     panel.border = element_rect(color = "grey", fill = NA, size = 1)
   )
-setwd("C:/github/ICRA/plots")
 ggplot2::ggsave ("plots/Partial_mortaltiy_boxplot_by_size_class.jpeg", width = 5, height = 5, units = 'in')
 
 ###############################
@@ -294,7 +330,7 @@ ggplot(summary_stats, aes(x = factor(YEAR), y = Mean_PM, color = factor(YEAR))) 
     y = "Mean Partial Mortality (%)",
     color= "Year"
   ) +
-  scale_fill_viridis_d(option = "C") +
+  scale_color_viridis_d(option = "C") +
   theme(
     axis.text.x = element_text(size = 8, family = "Helvetica", angle = 45, hjust = 0.7),
     axis.text.y = element_text(size = 10, family = "Helvetica"),
@@ -306,3 +342,35 @@ ggplot(summary_stats, aes(x = factor(YEAR), y = Mean_PM, color = factor(YEAR))) 
     limits = c(0, 35),  # Set y-axis to start from 0
     breaks = seq(0, 30, by = 10)  # Adjust the break interval
   )
+ggplot2::ggsave ("plots/Partial_mortaltiy_dotplot_CI.jpeg", width = 5, height = 5, units = 'in')
+
+
+#dot plot by size class
+ggplot(summary_stats_size %>% filter(!is.na(TAIL_BINS)), 
+       aes(x = as.factor(YEAR), y = Mean_PM, fill = as.factor(YEAR))) +
+  geom_point(shape = 21, size = 3, color = "black")+
+  geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper, color = as.factor(YEAR)), width = 0.2 ) +
+  theme(
+    panel.border = element_rect(color = "grey", fill = NA, size = 1) # Adds black border around each facet
+  ) +
+  labs(
+    x = "Survey Year",
+    y = "Mean percent partial mortality (%)"
+  ) +
+  facet_wrap(~TAIL_BINS, labeller = labeller(TAIL_BINS = facet_labels)) +  
+  scale_fill_viridis_d(option = "C") +
+  scale_color_viridis_d(option = "C") +
+  theme_minimal() +
+  theme(
+    legend.position = "none", 
+    axis.text.x = element_text(size = 12, family = "Helvetica"),
+    axis.text.y = element_text(size = 12, family = "Helvetica"),
+    axis.title = element_text(size = 14, family = "Helvetica"),
+    plot.title = element_text(size = 16, family = "Helvetica", face = "bold"),
+    panel.border = element_rect(color = "grey", fill = NA, size = 1)
+    # Adds black border around each facet
+  )
+ggplot2::ggsave ("plots/Partial_mortaltiy_by_size_dotplot_CI.jpeg", width = 5, height = 5, units = 'in')
+
+
+
