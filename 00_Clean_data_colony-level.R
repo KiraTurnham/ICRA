@@ -19,12 +19,10 @@ library(readxl)
 ncrmp <- read.csv("data/CoralBelt_Adults_raw_CLEANED_2023.csv")%>% mutate_if(is.character,as.factor) %>%  
   filter(ISLANDCODE == "TUT", REEF_ZONE == "Forereef", OBS_YEAR != "2020", DEPTH_BIN == "Mid", SPCODE %in% c("ISSP", "ICRA")) %>%
   filter(!MORPHOLOGY %in% c("Branching", "Columnar")) %>%
-  mutate(PER_DEAD = OLDDEAD + RDEXTENT1 + RDEXTENT2) %>%
-  filter(COLONYLENGTH > 4)%>% #only use colonies >5
+  mutate(PER_DEAD = OLDDEAD + RDEXTENT1 + RDEXTENT2,
+         Area_surveyed_m2 = 10) %>%
+  filter(COLONYLENGTH > 4.9)%>% #only use colonies >5
 rename(YEAR = OBS_YEAR)%>%
-   # Lat = LATITUDE,
-   # Long = LONGITUDE,
-   # Site = SITE)%>%
   droplevels()
 
   
@@ -42,44 +40,71 @@ write.csv(ncrmp, "NCRMP_COlony_level_TUT_filtered.csv")
 ncrmp$YEAR <- as.factor(ncrmp$YEAR)
 ncrmp$COLONYLENGTH <- as.numeric(ncrmp$COLONYLENGTH)
 ncrmp$PER_DEAD <- as.numeric(ncrmp$PER_DEAD)
-ncrmp2 <- select(ncrmp, MAX_DEPTH_M, SITE, PER_DEAD, LATITUDE, LONGITUDE, YEAR)
+ncrmp2 <- select(ncrmp, COLONYLENGTH, Area_surveyed_m2, MAX_DEPTH_M, SITE, PER_DEAD, LATITUDE, LONGITUDE, YEAR, TAIL_BINS)
 
 #read in 2025 survey data
+ICRA_2025 <- read.csv("data/2025_ICRA_colony_level_TUT.csv") %>%
+  mutate(ICRA_size_cm = as.numeric(ICRA_size_cm),
+         ICRA_partial_mortality = as.numeric(ICRA_partial_mortality),
+         Year=as.factor(Year),
+         Date = as.Date(Date),
+         MAX_DEPTH_M = MAX_depth_ft * 0.3048) %>%
+  rename(PER_DEAD = ICRA_partial_mortality,
+         COLONYLENGTH = ICRA_size_cm,
+         YEAR = Year,
+         LATITUDE = Lat,
+         LONGITUDE = Long,
+         SITE = Site)
 
 ICRA_2025 <- ICRA_2025 %>%
-  mutate(ICRA_size_cm = na_if(ICRA_size_cm, "NA"))  # Convert the string "NA" to actual NA
+  filter(COLONYLENGTH > 4.9 | is.na(COLONYLENGTH))
 
+ICRA_2025$TAIL_BINS <- cut(
+  ICRA_2025$COLONYLENGTH, 
+  breaks = c(-Inf, 12, 40, Inf), 
+  labels = c('Q20', 'QMED', 'Q80'))
+
+esa <- select(ICRA_2025, COLONYLENGTH, MAX_DEPTH_M, Area_surveyed_m2, SITE, PER_DEAD, LATITUDE, LONGITUDE, YEAR, TAIL_BINS)
+
+
+#Make dataframe based on corals measured w/i first 10mx2m of 2025 transects (to compare methods)
 ICRA_2025 <- ICRA_2025 %>%
-  mutate(ICRA_partial_mortality = na_if(ICRA_partial_mortality, "NA"))  # Convert the string "NA" to actual NA
+  mutate(First10m_YN = as.numeric(First10m_YN))
 
-#rename PM column
-ICRA_2025 <- ICRA_2025 %>%
-  rename(ICRA_total_PM = ICRA_partial_mortality) %>%
-  rename(Size_cm = ICRA_size_cm)
-#mutate(ICRA_total_PM = ifelse(is.na(ICRA_total_PM), NA, ICRA_total_PM))  # keeps NAs intact
+ICRA_20m <- ICRA_2025 %>%
+  filter(First10m_YN == 1)
 
-#ensure size data and PM are numeric
-ICRA_2025 <- ICRA_2025 %>%
-  mutate(Size_cm = as.numeric(Size_cm)) %>%
-  #mutate(ICRA_size_cm = ifelse(is.na(ICRA_size_cm), NA, ICRA_size_cm))  # keeps NAs intact
-  mutate(ICRA_total_PM = as.numeric(ICRA_total_PM))
-
-#ensure only colonies 5cm or greater were sized
-ICRA_2025 <- ICRA_2025 %>%
-  filter(Size_cm > 4.9 | is.na(Size_cm))
-esa <- read.csv("Feb2025_surveydata_raw.csv")%>% mutate_if(is.character,as.factor) %>%  
-  select(MAX_depth_m, Site, ICRA_percent_partial_mortality, Lat, Long)%>%
-  rename(SITE = Site, LATITUDE = Lat, LONGITUDE = Long, PER_DEAD = ICRA_percent_partial_mortality, MAX_DEPTH_M = MAX_depth_m) %>%
-  drop_na()
-esa$YEAR <- as.factor(esa$YEAR <-  "2025")
- 
-
+#add column for survey area
+ICRA_20m$Area_surveyed_m2<- 20
+ICRA_sub <- select(ICRA_20m, COLONYLENGTH, Area_surveyed_m2, MAX_DEPTH_M, SITE, PER_DEAD, LATITUDE, LONGITUDE, YEAR, TAIL_BINS)
+ICRA_sub$YEAR <- ordered(dat$YEAR, levels = c("2015", "2018", "2023", "2025"))
 
 #merge ncmrp and esa data    
 colnames(esa)
 colnames(ncrmp2)
-dat <- rbind(esa,ncrmp2)
+dat <- rbind(esa,ncrmp2)%>%
+  mutate(Bleaching_Period = ifelse(YEAR %in% c(2015, 2018, 2023), "Pre-Bleaching", "Post-Bleaching"))
+
 dat$YEAR <- ordered(dat$YEAR, levels = c("2015", "2018", "2023", "2025"))
+
+write.csv(dat, "data/all_ICRA_Colony_level_data.csv", row.names = FALSE)
+
+
+#combine the 20m data and store as seperate dataframe to compare survey methods
+colnames(ICRA_sub)
+ICRA_sub$Bleaching_Period <- "Post-Bleaching"
+combined_colony_data_by_method <- rbind(dat,ICRA_sub)
+
+#name the different survey method areas
+combined_colony_data_by_method <- combined_colony_data_by_method %>%
+  mutate(Survey_Type = case_when(
+    Area_surveyed_m2 == 20 ~ "20m",
+    Area_surveyed_m2 == 60 ~ "60m",
+    Area_surveyed_m2 == 10 ~ "10m",
+    TRUE ~ "Other"
+  ))
+write.csv(combined_colony_data_by_method, "data/ICRA_combined_size_data_by_method.csv", row.names = FALSE)
+
 
 ridge <- ggplot(dat, aes(x=PER_DEAD, y = YEAR, fill=YEAR)) +
   geom_density_ridges() +
