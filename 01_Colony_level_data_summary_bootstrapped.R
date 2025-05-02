@@ -1,9 +1,11 @@
-
+rm(list = ls())
 library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(broom)
 library(purrr)
+
+load("data/dat.RData")
 
 #double check numbers for PM data (remove NA, but keep zeros)
 dat %>%
@@ -17,6 +19,9 @@ dat_sub <- dat %>%
   filter(YEAR != 2018) %>%
   filter(!is.na(PER_DEAD))  # remove NAs but keep zeros
 
+###########################################
+#Bootstrap and run glm for PM data by year#
+###########################################
 
 # calculate weights for glm 
 dat_sub <- dat_sub %>%
@@ -109,8 +114,9 @@ emmeans::emmeans(model, pairwise ~ YEAR)
 #YEAR2015 - YEAR2025  -25.527 2.23 657 -11.450  <.0001
 #YEAR2023 - YEAR2025  -25.109 2.23 657 -11.263  <.0001
 
-
-#also calc bootstrapped average PM for plots and reporting
+###########################################################
+#also calc bootstrapped average PM for plots and reporting#
+###########################################################
 mean_PM_by_year <- map_df(1:n_boot, function(i) {
   
   sampled_sites_2025 <- dat_sub %>%
@@ -140,6 +146,36 @@ mean_PM_summary <- mean_PM_by_year %>%
   )
 
 mean_PM_summary
+
+
+#########################################
+#also run analysuis for PM by size class#
+#########################################
+boot_mean_PM_by_size <- vector("list", n_boot)
+
+set.seed(123)
+
+
+boot_mean_PM_by_size <- map_df(1:n_boot, function(i) {
+  
+  # Get mean PM per year and size class
+  summary_i <- boot_data %>%
+    filter(!is.na(TAIL_BINS)) %>%
+    group_by(YEAR, TAIL_BINS) %>%
+    summarise(mean_PM = mean(PER_DEAD, na.rm = TRUE), .groups = "drop") %>%
+    mutate(bootstrap = i)
+  
+  return(summary_i)
+})
+
+boot_summary_size <- boot_mean_PM_by_size %>%
+  group_by(YEAR, TAIL_BINS) %>%
+  summarise(
+    mean_PM = mean(mean_PM),
+    lower_CI = quantile(mean_PM, 0.025),
+    upper_CI = quantile(mean_PM, 0.975),
+    .groups = "drop"
+  )
 
 # Plot the distribution of partial mortality values for 2015 and 2023
 dat_sub %>%
@@ -229,6 +265,55 @@ ggplot(mean_PM_summary, aes(x = factor(YEAR), y = mean_PM_mean, color = factor(Y
   )
 ggplot2::ggsave ("plots/dotplot_PM_size_bootstrapped.jpeg", width = 5, height = 2.5, units = 'in')
 
+
+# Plotting mean partial mortality per year.  for main text.
+ggplot(boot_summary_size, aes(x = factor(YEAR), y = mean_PM, color = factor(YEAR))) +
+  geom_point(size = 3) +
+  facet_wrap(~ TAIL_BINS)+
+  geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI), width = 0.2) +
+  theme_minimal() +
+  labs(
+    x = "Year",
+    y = "Mean Partial Mortality (%)",
+    title = "Average Partial Mortality by Year (Bootstrapped)",
+    color="Year"
+  ) +
+  theme(
+    text = element_text(size = 14),
+    plot.title = element_text(hjust = 0.5)
+  ) +
+  scale_color_viridis_d(option = "C") +
+  scale_y_continuous(
+    limits = c(0, NA),  
+    breaks = seq(0, max(boot_summary_size$mean_PM), by = 10) 
+  )
+ggplot2::ggsave ("plots/dotplot_PM_size_bootstrapped.jpeg", width = 5, height = 2.5, units = 'in')
+
+
+
+# Plotting mean partial mortality per year barplot.  for main text.
+ggplot(mean_PM_summary, aes(x = factor(YEAR), y = mean_PM_mean, fill = factor(YEAR))) +
+  geom_col() +
+  geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI), width = 0.2) +
+  theme_minimal() +
+  labs(
+    x = "Year",
+    y = "Mean Partial Mortality (%)",
+    title = "Average Partial Mortality by Year (Bootstrapped)",
+    fill="Year"
+  ) +
+  theme(
+    text = element_text(size = 14),
+    plot.title = element_text(hjust = 0.5)
+  ) +
+  scale_color_viridis_d(option = "C") +
+  scale_y_continuous(
+    limits = c(0, NA),  # Set y-axis to start from 0
+    breaks = seq(0, max(mean_PM_summary$mean_PM_mean), by = 10)  # Adjust the break interval
+  )
+
+ggplot2::ggsave ("plots/barplot_PM_size_by_class_bootstrapped.jpeg", width = 5, height = 2.5, units = 'in')
+
 #add meanPM summary by size class, make dot plot xxx also add bar plots
 
 #plotting regression coefficient. first remove intercept (2015), b/c graphing change since 2015
@@ -304,9 +389,12 @@ ggplot2::ggsave ("plots/bootstrap_parameters_for_2025.jpeg", width = 5, height =
 
 #mean pm increased from 7.5% (2015) to 29.9% (2025), based on bootstrapped estimates (95% CI for the 2025 increase: 9.4% to 39.1%).
 
+
+
 #comapre bootstrapped data to non
 #run model for full data
 model_nonboot <- glm(PER_DEAD ~ factor(YEAR), data = dat_sub, weights = weight, family = gaussian())
+
 
 #add column identifiying method
 boot_summary$Method <- "Bootstrapped"
@@ -355,3 +443,24 @@ ggplot(estimates_clean, aes(x = Parameter, y = Mean_Estimate, color = Method, sh
     plot.title = element_text(size = 16, hjust = 0.5)
   )
 ggplot2::ggsave ("plots/model_comparisons_bootstrap_vs_full_PM_by_year.jpeg", width = 5, height = 2.5, units = 'in')
+
+#exploring other than glm:
+library(glmmTMB)
+
+# Ensure PM is scaled between 0 and 1 (not 0 or 1 exactly)
+dat_sub <- dat_sub %>%
+  filter(!is.na(PER_DEAD)) %>%
+  mutate(
+    PM_prop = (PER_DEAD + 0.01) / 100.02  # scale to (0,1) range
+  )
+
+# Fit model
+mod <- glmmTMB(
+  PM_prop ~ YEAR + TAIL_BINS + (1 | SITE),
+  data = dat_sub,
+  family = beta_family(link = "logit")
+)
+summary(mod)
+
+emmeans(mod, pairwise ~ YEAR)
+
