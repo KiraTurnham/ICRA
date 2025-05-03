@@ -5,17 +5,38 @@ library(ggplot2)
 library(broom)
 library(purrr)
 
-load("data/dat.RData")
+load("data/COLONY_SIZE_PM.RData")
+
+#options for colors ?
+year_colors <- c(
+  "2015" = "#4b006c",
+  "2018" = "#84186d",
+  "2023" = "#d71b33",
+  "2025" = "#f2a47c"
+)
+year_colors <- c(
+  "2015" = "#000004",  # near black
+  "2018" = "#420a68",  # purple
+  "2023" = "#932667",  # red-magenta
+  "2025" = "#f1605d"   # red-orange
+)
+
+year_colors <- c(
+  "2015" = "#6c117b",   # deep violet (not pure black)
+  "2018" = "#932667",   # rich purple
+  "2023" = "#f87d13",   # magenta-pink
+  "2025" = "#f5c527"    # strong orange (warm but soft, readable)
+)
 
 #double check numbers for PM data (remove NA, but keep zeros)
-dat %>%
+COLONY_SIZE_PM %>%
   group_by(YEAR) %>%
   filter(!is.na(PER_DEAD))%>%
   summarize(n_unique_sites = n_distinct(paste(LATITUDE, LONGITUDE)))
 
 # Data preparation
 # Remove 2018 due to low sample coverage
-dat_sub <- dat %>%
+dat_sub <- COLONY_SIZE_PM %>%
   filter(YEAR != 2018) %>%
   filter(!is.na(PER_DEAD))  # remove NAs but keep zeros
 
@@ -189,19 +210,20 @@ dat_sub %>%
     y = "Frequency",
     title = "Distribution of Partial Mortality (2015 vs 2023, bootstrapped data)"
   ) +
-  scale_fill_viridis_d(option = "C") +
+  scale_fill_viridis_d(option = "D") +
   theme(
     text = element_text(size = 14),
     plot.title = element_text(hjust = 0.5)
   )
 ggplot2::ggsave ("plots/histogram_PM_year_bootstrapped.jpeg", width = 5, height = 2.5, units = 'in')
 
+
 # Boxplot to visualize outliers in 2015 and 2023
 dat_sub %>%
   filter(YEAR %in% c(2015, 2023, 2025)) %>%
   ggplot(aes(x = factor(YEAR), y = PER_DEAD, fill = factor(YEAR))) +
   geom_boxplot() +
-  scale_fill_viridis_d(option = "C") +
+  scale_fill_manual(values = year_colors)+
   theme_minimal() +
   labs(
     x = "Year",
@@ -223,7 +245,7 @@ dat_sub %>%
   ggplot(aes(x = factor(YEAR), y = PER_DEAD, fill = factor(YEAR))) +
   facet_wrap(~ TAIL_BINS)+
   geom_boxplot() +
-  scale_fill_viridis_d(option = "C") +
+  scale_fill_viridis_d(option = "plasma") +
   theme_minimal() +
   labs(
     x = "Year",

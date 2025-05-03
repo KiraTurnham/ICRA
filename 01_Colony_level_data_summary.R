@@ -4,31 +4,20 @@ library(viridis)
 library(ggridges)
 library(readxl)
 
+load("data/COLONY_SIZE_PM.RData")
+
+
 #Data summaries
-ncrmp2 %>%
+summary_by_year_and_total <- COLONY_SIZE_PM %>%
+  group_by(Data_Source, YEAR) %>%
   summarise(
     non_na_count = sum(!is.na(COLONYLENGTH)),
-    na_count = sum(is.na(COLONYLENGTH))
-  )
-#282 colonies were sized
-
-esa %>%
-  summarise(
-    non_na_count = sum(!is.na(COLONYLENGTH)),
-    na_count = sum(is.na(COLONYLENGTH))
-  )
-#626 colonies were sized (648 were not: for 2025 data, we only sized colonies in March. All had PM measured.)
-
-# calculate number of colonies counted for size data in first 10mx2m
-ICRA_20m %>%
-  summarise(
-    non_na_count = sum(!is.na(COLONYLENGTH)),
-    na_count = sum(is.na(COLONYLENGTH))
-  )
-#416 corals measured
+    na_count = sum(is.na(COLONYLENGTH)),
+    .groups = "drop"  # This ensures that grouping is removed after summarisation
+  ) 
 
 #sample size per bleaching period
-dat %>%
+COLONY_SIZE_PM %>%
   group_by(Bleaching_Period) %>%
   summarise(non_na_count = sum(!is.na(COLONYLENGTH)),
              na_count = sum(is.na(COLONYLENGTH)) )
@@ -48,7 +37,7 @@ combined_colony_data_by_method %>%
 
 
 # Compute mean size per year
-mean_size_per_year <- dat %>%
+mean_size_per_year <- COLONY_SIZE_PM %>%
   group_by(YEAR) %>%
   summarise(COLONYLENGTH = mean(COLONYLENGTH, na.rm = TRUE))
 #1  2015      22.4
@@ -57,7 +46,7 @@ mean_size_per_year <- dat %>%
 #4  2025      36.7
 
 # mean PM per year
-mean_PM_per_year <- dat %>%
+mean_PM_per_year <- COLONY_SIZE_PM %>%
   group_by(YEAR) %>%
   summarise(mean_PM = mean(PER_DEAD, na.rm = TRUE))
 #1 2015     7.48
@@ -67,7 +56,7 @@ mean_PM_per_year <- dat %>%
 # ~ four fold increase
 
 # N per year
-n_per_year <- dat %>%
+n_per_year <- COLONY_SIZE_PM %>%
   group_by(YEAR) %>%
   summarise(N = n())
 #1 2015     58
@@ -76,11 +65,11 @@ n_per_year <- dat %>%
 #4 2025   1274
 
 # calc the max size (for plotting later)
-max_size <- max(dat$PER_DEAD, na.rm = TRUE)
+max_size <- max(COLONY_SIZE_PM$PER_DEAD, na.rm = TRUE)
 
 #calculate summary stats of PM by year
 
-summary_stats <- dat %>%
+summary_stats <- COLONY_SIZE_PM %>%
   group_by(YEAR)%>%
   summarise(
     Mean_PM = mean(PER_DEAD, na.rm = TRUE),
@@ -92,7 +81,7 @@ summary_stats <- dat %>%
     .groups = "drop"
   )
 #calculate summary stats of PM by size and year
-summary_stats_size <- dat %>%
+summary_stats_size <- COLONY_SIZE_PM %>%
   group_by(YEAR, TAIL_BINS)%>%
   summarise(
     Mean_PM = mean(PER_DEAD, na.rm = TRUE),
@@ -107,7 +96,7 @@ summary_stats_size <- dat %>%
 
 
 #double check site numbers for PM data (remove NA, but keep zeros)
-dat %>%
+COLONY_SIZE_PM %>%
   group_by(YEAR) %>%
   filter(!is.na(PER_DEAD))%>%
   summarize(n_unique_sites = n_distinct(paste(LATITUDE, LONGITUDE)))
@@ -131,7 +120,7 @@ facet_labels <- c(
 ###################################
 #####ridgeplot of PM by year#######
 ###################################
-ggplot(dat, aes(x = PER_DEAD, y = as.factor(YEAR), fill = as.factor(YEAR))) +
+ggplot(COLONY_SIZE_PM, aes(x = PER_DEAD, y = as.factor(YEAR), fill = as.factor(YEAR))) +
   geom_density_ridges(alpha = 0.8) +  # Ridge plot
   geom_point(data = mean_PM_per_year, aes(x = (mean_PM), y = as.factor(YEAR)), #can change to log(mean_PM)
              color = "black", size = 3, shape = 16) +  # Means are points
@@ -160,7 +149,7 @@ ggplot2::ggsave ("plots/Partial_mortality_ridge.jpeg", width = 5, height = 5, un
 ###################################
 
 #calculate proportions of each class per year (do not have density of PM corals)
-size_props <- dat %>%
+size_props <- COLONY_SIZE_PM %>%
   group_by(YEAR, TAIL_BINS) %>%
   summarise(n = n(), .groups = "drop") %>%
   group_by(YEAR) %>%
@@ -172,7 +161,7 @@ size_props <- dat %>%
 q20_cutoff <- 12
 q80_cutoff <- 40
 
-ggplot(dat, aes(x = COLONYLENGTH, y = as.factor(YEAR), fill = as.factor(YEAR))) +
+ggplot(COLONY_SIZE_PM, aes(x = COLONYLENGTH, y = as.factor(YEAR), fill = as.factor(YEAR))) +
   geom_density_ridges(alpha = 0.8) +
   
   # Vertical lines for Q20 and Q80 cutoffs
@@ -180,7 +169,7 @@ ggplot(dat, aes(x = COLONYLENGTH, y = as.factor(YEAR), fill = as.factor(YEAR))) 
   geom_vline(xintercept = q80_cutoff, linetype = "dashed", color = "blue", linewidth = 0.7) +
   
   # Proportion labels above each ridge
-  geom_text(data = size_props,
+  geom_text(COLONY_SIZE_PM = size_props,
             aes(x = q20_cutoff - 5,  # slightly left of Q20 line
                 y = as.factor(YEAR),
                 label = paste0(round(prop_q20 * 100), "%")),
@@ -274,7 +263,7 @@ ggplot2::ggsave ("plots/Partial_mortaltiy_boxplot_by_size_class.jpeg", width = 5
 ###############################
 #plot histograms of PM by year#
 ###############################
-dat %>%
+COLONY_SIZE_PM %>%
   filter(YEAR %in% c(2015, 2023, 2018, 2025)) %>%
   ggplot(aes(x = PER_DEAD, fill = factor(YEAR))) +
   geom_histogram(bins = 20, alpha = 0.6, position = "identity") +
@@ -299,7 +288,7 @@ dat %>%
 #################################
 # Boxplot to visualize outliers#
 ################################
-dat %>%
+COLONY_SIZE_PM %>%
   filter(YEAR %in% c(2015, 2023, 2018, 2025)) %>%
   ggplot(aes(x = factor(YEAR), y = PER_DEAD, fill = factor(YEAR))) +
   geom_boxplot() +

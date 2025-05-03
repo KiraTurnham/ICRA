@@ -82,17 +82,23 @@ ICRA_sub$YEAR <- ordered(ICRA_sub$YEAR, levels = c("2015", "2018", "2023", "2025
 #merge ncmrp and esa data    
 colnames(esa)
 colnames(ncrmp2)
-dat <- rbind(esa,ncrmp2)%>%
-  mutate(Bleaching_Period = ifelse(YEAR %in% c(2015, 2018, 2023), "Pre-Bleaching", "Post-Bleaching"))
+COLONY_SIZE_PM <- rbind(
+  mutate(esa, Data_Source = "esa"),      
+  mutate(ncrmp2, Data_Source = "ncrmp2") 
+) %>%
+  mutate(
+    Bleaching_Period = ifelse(YEAR %in% c(2015, 2018, 2023), "Pre-Bleaching", "Post-Bleaching")
+  )
+COLONY_SIZE_PM$YEAR <- ordered(COLONY_SIZE_PM$YEAR, levels = c("2015", "2018", "2023", "2025"))
 
-dat$YEAR <- ordered(dat$YEAR, levels = c("2015", "2018", "2023", "2025"))
+write.csv(COLONY_SIZE_PM, "data/all_ICRA_Colony_level_data.csv", row.names = FALSE)
 
-write.csv(dat, "data/all_ICRA_Colony_level_data.csv", row.names = FALSE)
+save(COLONY_SIZE_PM, file = "data/COLONY_SIZE_PM.RData")
 
 #combine the 20m data and store as seperate dataframe to compare survey methods
 colnames(ICRA_sub)
 ICRA_sub$Bleaching_Period <- "Post-Bleaching"
-combined_colony_data_by_method <- rbind(dat,ICRA_sub)
+combined_colony_data_by_method <- rbind(COLONY_SIZE_PM,ICRA_sub)
 
 #name the different survey method areas
 combined_colony_data_by_method <- combined_colony_data_by_method %>%
@@ -104,33 +110,7 @@ combined_colony_data_by_method <- combined_colony_data_by_method %>%
   ))
 write.csv(combined_colony_data_by_method, "data/ICRA_combined_size_data_by_method.csv", row.names = FALSE)
 
-
-ridge <- ggplot(dat, aes(x=PER_DEAD, y = YEAR, fill=YEAR)) +
-  geom_density_ridges() +
-  stat_density_ridges(quantile_lines = TRUE, quantiles = 2, alpha = 0.5, color= "black", linewidth = 0.5)+
-  scale_fill_viridis(discrete = TRUE) +
-  theme_ipsum_pub() +
-  scale_y_discrete(limits = rev)+
-  xlab("ICRA partial mortality (%) over time")
-
-ridge
-
-setwd("C:/github/ICRA/plots")
-ggplot2::ggsave ("Partial_mortality_ridge.jpeg", width = 5, height = 5, units = 'in')
-
-ridge2 <- ggplot(dat, aes(x=PER_DEAD, y = YEAR, fill=..x..)) +
-  geom_density_ridges_gradient(scale = 3, rel_min_height = 0.01) +
-  scale_fill_viridis(name = "PER_DEAD", option = "plasma") +
-  labs(title = 'ICRA partial mortality (%) over time') +
-  theme_ipsum() +
-  scale_y_discrete(limits = rev)+
-  theme(
-    legend.position="none",
-    panel.spacing = unit(0.1, "lines"),
-    strip.text.x = element_text(size = 8)
-  )
-
-ridge2
+save(combined_colony_data_by_method, file = "data/BY_METHOD_COLONY_SIZE_PM.RData")
 
 
 
