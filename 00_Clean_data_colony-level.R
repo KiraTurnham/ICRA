@@ -40,7 +40,8 @@ write.csv(ncrmp, "NCRMP_COlony_level_TUT_filtered.csv")
 ncrmp$YEAR <- as.factor(ncrmp$YEAR)
 ncrmp$COLONYLENGTH <- as.numeric(ncrmp$COLONYLENGTH)
 ncrmp$PER_DEAD <- as.numeric(ncrmp$PER_DEAD)
-ncrmp2 <- select(ncrmp, COLONYLENGTH, Area_surveyed_m2, MAX_DEPTH_M, SITE, PER_DEAD, LATITUDE, LONGITUDE, YEAR, TAIL_BINS)
+ncrmp$DATE_ <- as.Date(ncrmp$DATE_)
+ncrmp2 <- select(ncrmp, DATE_,COLONYLENGTH, Area_surveyed_m2, MAX_DEPTH_M, SITE, PER_DEAD, LATITUDE, LONGITUDE, YEAR, TAIL_BINS)
 
 #read in 2025 survey data
 ICRA_2025 <- read.csv("data/2025_ICRA_colony_level_TUT.csv") %>%
@@ -54,7 +55,8 @@ ICRA_2025 <- read.csv("data/2025_ICRA_colony_level_TUT.csv") %>%
          YEAR = Year,
          LATITUDE = Lat,
          LONGITUDE = Long,
-         SITE = Site)
+         SITE = Site,
+         DATE_=Date)
 
 ICRA_2025 <- ICRA_2025 %>%
   filter(COLONYLENGTH > 4.9 | is.na(COLONYLENGTH))
@@ -64,7 +66,7 @@ ICRA_2025$TAIL_BINS <- cut(
   breaks = c(-Inf, 12, 40, Inf), 
   labels = c('Q20', 'QMED', 'Q80'))
 
-esa <- select(ICRA_2025, COLONYLENGTH, MAX_DEPTH_M, Area_surveyed_m2, SITE, PER_DEAD, LATITUDE, LONGITUDE, YEAR, TAIL_BINS)
+esa <- select(ICRA_2025, DATE_, COLONYLENGTH, MAX_DEPTH_M, Area_surveyed_m2, SITE, PER_DEAD, LATITUDE, LONGITUDE, YEAR, TAIL_BINS)
 
 
 #Make dataframe based on corals measured w/i first 10mx2m of 2025 transects (to compare methods)
@@ -76,7 +78,7 @@ ICRA_20m <- ICRA_2025 %>%
 
 #add column for survey area
 ICRA_20m$Area_surveyed_m2<- 20
-ICRA_sub <- select(ICRA_20m, COLONYLENGTH, Area_surveyed_m2, MAX_DEPTH_M, SITE, PER_DEAD, LATITUDE, LONGITUDE, YEAR, TAIL_BINS)
+ICRA_sub <- select(ICRA_20m, DATE_, COLONYLENGTH, Area_surveyed_m2, MAX_DEPTH_M, SITE, PER_DEAD, LATITUDE, LONGITUDE, YEAR, TAIL_BINS)
 ICRA_sub$YEAR <- ordered(ICRA_sub$YEAR, levels = c("2015", "2018", "2023", "2025"))
 
 #merge ncmrp and esa data    

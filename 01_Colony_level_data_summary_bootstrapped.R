@@ -38,7 +38,9 @@ COLONY_SIZE_PM %>%
 # Remove 2018 due to low sample coverage
 dat_sub <- COLONY_SIZE_PM %>%
   filter(YEAR != 2018) %>%
-  filter(!is.na(PER_DEAD))  # remove NAs but keep zeros
+  filter(!is.na(PER_DEAD))%>%  # remove NAs but keep zeros
+  mutate(YEAR = factor(YEAR))  
+
 
 ###########################################
 #Bootstrap and run glm for PM data by year#
