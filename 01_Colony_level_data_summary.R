@@ -5,16 +5,43 @@ library(ggridges)
 library(readxl)
 
 load("data/COLONY_SIZE_PM.RData")
-
+SOUTH_COLONY_SIZE_PM<-read.csv("data/south_only_ICRA_Colony_level_data.csv")
 
 #Data summaries
+
+#how many corals were sized (this excludes Feb 20205 data where size wasn't taken)
 summary_by_year_and_total <- COLONY_SIZE_PM %>%
   group_by(Data_Source, YEAR) %>%
   summarise(
     non_na_count = sum(!is.na(COLONYLENGTH)),
     na_count = sum(is.na(COLONYLENGTH)),
-    .groups = "drop"  # This ensures that grouping is removed after summarisation
+    .groups = "drop"  
   ) 
+
+#how many corals were sized in south sites only (this excludes Feb 20205 data where size wasn't taken)
+summary_by_year_and_total_SOUTH <- SOUTH_COLONY_SIZE_PM %>%
+  group_by(Data_Source, YEAR) %>%
+  summarise(
+    non_na_count = sum(!is.na(COLONYLENGTH)),
+    na_count = sum(is.na(COLONYLENGTH)),
+    .groups = "drop"  
+  ) 
+#1 esa          2025          617      569
+#2 ncrmp2       2015           53        0
+#3 ncrmp2       2018           44        0
+#4 ncrmp2       2023          179        0
+
+#how many corals were measured PM by year and size class: NA = feb 2025 data
+summary_by_year_and_totalPM <- COLONY_SIZE_PM %>%
+  group_by(Data_Source, YEAR, TAIL_BINS) %>%
+  summarise(non_na_count = sum(!is.na(PER_DEAD)),
+            na_count = sum(is.na(PER_DEAD)) )
+
+#how many corals were measured PM by year and size class: NA = feb 2025 data
+summary_by_year_and_totalPM_south <- SOUTH_COLONY_SIZE_PM %>%
+  group_by(Data_Source, YEAR, TAIL_BINS) %>%
+  summarise(non_na_count = sum(!is.na(PER_DEAD)),
+            na_count = sum(is.na(PER_DEAD)) )
 
 #sample size per bleaching period
 COLONY_SIZE_PM %>%
@@ -26,18 +53,17 @@ COLONY_SIZE_PM %>%
 #626 colonies were sized  in 2025: (648 were not: only sized colonies in March. All had PM measured.)
 
 
-# Compute sample size per method
-combined_colony_data_by_method %>%
-  group_by(Survey_Type) %>%
-  summarise(N = n())
-#   Area_surveyed_m2     N
-#               10   282
-#               20   417
-#               60  1274 #subtract  417
-
-
 # Compute mean size per year
 mean_size_per_year <- COLONY_SIZE_PM %>%
+  group_by(YEAR) %>%
+  summarise(COLONYLENGTH = mean(COLONYLENGTH, na.rm = TRUE))
+#1  2015      22.4
+#2  2018      26.2
+#3  2023      28.0
+#4  2025      36.7
+
+#when excluding noth: 
+mean_size_per_year_south <- SOUTH_COLONY_SIZE_PM %>%
   group_by(YEAR) %>%
   summarise(COLONYLENGTH = mean(COLONYLENGTH, na.rm = TRUE))
 #1  2015      22.4
@@ -55,17 +81,25 @@ mean_PM_per_year <- COLONY_SIZE_PM %>%
 #4 2025     30.2 
 # ~ four fold increase
 
-# N per year
-n_per_year <- COLONY_SIZE_PM %>%
+# mean PM per year south only
+mean_PM_per_year_south <- SOUTH_COLONY_SIZE_PM %>%
   group_by(YEAR) %>%
-  summarise(N = n())
-#1 2015     58
-#2 2018     44
-#3 2023    180
-#4 2025   1274
+  summarise(mean_PM = mean(PER_DEAD, na.rm = TRUE))
+#1  2015    7.81
+#2  2018    7.20
+#3  2023    7.94
+#4  2025   30.2
+
 
 # calc the max size (for plotting later)
-max_size <- max(COLONY_SIZE_PM$PER_DEAD, na.rm = TRUE)
+max_size <- COLONY_SIZE_PM %>%
+  group_by(YEAR) %>%
+  summarise(max_size = max(COLONYLENGTH, na.rm = TRUE))
+#YEAR  max_size
+#1 2015        73
+#2 2018        70
+#3 2023       116
+#4 2025       170
 
 #calculate summary stats of PM by year
 
@@ -285,17 +319,48 @@ COLONY_SIZE_PM %>%
   )
 
 
-#################################
-# Boxplot to visualize outliers#
-################################
-COLONY_SIZE_PM %>%
+#############################################
+# Boxplot to visualize outliers of size data#
+#############################################
+#test removing sizes in 2025 that are bigger than previous records
+max_pre2025 <- COLONY_SIZE_PM %>%
+  filter(YEAR < 2025) %>%
+  summarise(max_size = max(COLONYLENGTH, na.rm = TRUE)) %>%
+  pull(max_size)
+
+filtered_data_max <- COLONY_SIZE_PM %>%
+  filter(COLONYLENGTH <= max_pre2025)
+
+#save filtered data 
+
+#visuzlize both by renaming first line :
+filtered_data_max %>%
+  filter(YEAR %in% c(2015, 2023, 2018, 2025)) %>%
+  ggplot(aes(x = factor(YEAR), y = COLONYLENGTH, fill = factor(YEAR))) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(
+    x = "Year",
+    y = "Colony lenth (cm)"
+  ) +
+  scale_fill_viridis_d(option = "C") + 
+  theme(
+    axis.text.x = element_text(size = 8, family = "Helvetica", angle = 45, hjust = 0.7),
+    axis.text.y = element_text(size = 10, family = "Helvetica"),
+    axis.title = element_text(size = 12, family = "Helvetica"),
+    text = element_text(size = 12),
+    plot.title = element_text(hjust = 0.5)
+  ) 
+
+#plot PM of filtered max data
+filtered_data_max %>%
   filter(YEAR %in% c(2015, 2023, 2018, 2025)) %>%
   ggplot(aes(x = factor(YEAR), y = PER_DEAD, fill = factor(YEAR))) +
   geom_boxplot() +
   theme_minimal() +
   labs(
     x = "Year",
-    y = "Partial Mortality (%)"
+    y = "Partial mortality (%)"
   ) +
   scale_fill_viridis_d(option = "C") + 
   theme(
